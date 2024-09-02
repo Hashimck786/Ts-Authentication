@@ -1,11 +1,12 @@
 import { Request , Response , NextFunction } from "express";
-import jwt, { JwtPayload } from "jsonwebtoken";
+import jwt, { JwtPayload} from "jsonwebtoken";
 
 interface AuthRequest extends Request {
   user?: JwtPayload;
 }
 
 export const authMiddleware  = ( roles: string[] = []) => {return (req:AuthRequest ,res:Response, next:NextFunction) => {
+ try {
   const authHeader = req.headers.authorization;
   const secretKey = process.env.JWT_SECRET as string;
   if(!authHeader) {
@@ -25,5 +26,15 @@ export const authMiddleware  = ( roles: string[] = []) => {return (req:AuthReque
   }
 
   next();
+ } catch (error) {
+  if(error instanceof jwt.TokenExpiredError){
+    console.log('Token Expired Error');
+  }
+  if(error instanceof jwt.JsonWebTokenError){
+    console.log('Token verification Error')
+  }else{
+    console.log('An unknown Error occured', error)
+  }
 }
  }
+  }

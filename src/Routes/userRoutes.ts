@@ -1,7 +1,7 @@
 import { Router , Request, Response } from "express";
 import { PrismaClient } from '@prisma/client';
 import bcrypt  from 'bcrypt';
-import jwt from 'jsonwebtoken';
+import jwt, { TokenExpiredError } from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import { validate } from "class-validator";
 import { LoginDto, RegisterDto } from "../dto/user.dto";
@@ -114,9 +114,18 @@ router.post('/login', async(req,res) => {
 
   const refreshToken = jwt.sign({userId:user?.id,role:user?.role,email:user?.email},jwtsecret,{expiresIn : '7d'});
 
+
+
   if(!token){
     return res.sendStatus(401)
   }
+
+  await prisma.refreshToken.create({
+    data:{
+      token,
+      userId:user.id
+    }
+  });
 
   
 
@@ -139,4 +148,34 @@ router.get('/prohibited',authMiddleware(['admin']), async (req:Request,res:Respo
   res.send('you are an admin right? bcz you are in a admin only page')
 })
 
+
+// refreshtoken verification
+
+router.post('/refreshtoken',async(req:Request,res:Response) => {
+  const {refreshToken} = req.body;
+  const refreshjwtsecret = process.env.REFRESH_TOKEN_SECRET as string
+  const accessjwtsecret = process.env.JWT_SECRET as string;
+  const decoded = jwt.verify(refreshToken,refreshjwtsecret) as { userId: string ,role: string }
+
+  const isToken = prisma.refreshToken.findUnique({
+    where:{token:refreshToken}
+  })
+  if(!isToken ){
+    return res.status(403).send('Invalid or expired refrshtoken')
+  }
+
+  const token = jwt.sign({userId:decoded.userId,role:decoded.role},accessjwtsecret)
+
+  res.json({token})
+});
+
+router.get('/logout/:id',authMiddleware(['user']), async(req:Request, res:Response) => {
+  const id = parseInt(req.params.id);
+
+  await prisma.refreshToken.deleteMany({
+    where:{userId:id}
+  })
+
+  res.sendStatus(200);
+})
 export default router;
